@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fichário — Assistente de Documentos com RAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">§</span>
+      <div class="brand-text">
+        <h1>Fichário</h1>
+        <p>assistente de documentos · RAG no navegador</p>
+      </div>
+    </div>
+    <button id="btn-config" class="btn-ghost">Chave de API</button>
+  </header>
+
+  <main class="workspace">
+
+    <!-- COLUNA ESQUERDA: upload + índice de fichas -->
+    <aside class="drawer">
+      <div class="drawer-head">
+        <span class="drawer-label">Gaveta 01</span>
+        <h2>Documento</h2>
+      </div>
+
+      <div id="dropzone" class="dropzone">
+        <input type="file" id="file-input" accept="application/pdf" hidden>
+        <p class="dropzone-title">Solte um PDF aqui</p>
+        <p class="dropzone-sub">ou clique para escolher</p>
+      </div>
+
+      <div id="doc-status" class="doc-status hidden">
+        <p class="doc-name" id="doc-name">—</p>
+        <p class="doc-meta" id="doc-meta">—</p>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="doc-stage" id="doc-stage">Aguardando…</p>
+      </div>
+
+      <div class="drawer-head drawer-head-cards">
+        <span class="drawer-label">Índice</span>
+        <h2>Fichas geradas</h2>
+      </div>
+      <div id="card-index" class="card-index">
+        <p class="empty-note">As fichas catalográficas do documento vão aparecer aqui após o processamento.</p>
+      </div>
+    </aside>
+
+    <!-- COLUNA DIREITA: chat -->
+    <section class="reading-room">
+      <div id="chat-log" class="chat-log">
+        <div class="chat-msg system">
+          <p>Envie um PDF na gaveta ao lado. Depois de catalogado, pergunte qualquer coisa sobre o conteúdo — cada resposta vem acompanhada das fichas usadas como fonte.</p>
+        </div>
+      </div>
+
+      <form id="chat-form" class="chat-form">
+        <input type="text" id="chat-input" placeholder="Pergunte algo sobre o documento…" autocomplete="off" disabled>
+        <button type="submit" id="chat-send" disabled>Perguntar</button>
+      </form>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal de configuração da API -->
+<div id="config-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Chave de API — Google Gemini</h3>
+    <p>Sua chave fica só no seu navegador (localStorage), nunca é enviada a nenhum servidor além da API do Google.</p>
+    <input type="password" id="api-key-input" placeholder="Cole sua chave aqui">
+    <p class="modal-hint">Não tem uma chave? Gere gratuitamente em <strong>aistudio.google.com/apikey</strong></p>
+    <div class="modal-actions">
+      <button id="btn-save-key" class="btn-primary">Salvar</button>
+      <button id="btn-close-modal" class="btn-ghost">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
