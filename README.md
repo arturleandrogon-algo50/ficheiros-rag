@@ -26,6 +26,36 @@ Sem backend, sem banco de dados vetorial externo. Só HTML, CSS e JavaScript pur
 - API do Google Gemini para embeddings e geração de texto
 - Busca por similaridade de cosseno implementada do zero
 
+
+
 ## Conceito visual
 
 A interface usa a metáfora de um fichário/arquivo de biblioteca: cada trecho do documento processado vira uma "ficha catalográfica" visível na lateral. A ideia é deixar visível uma etapa que normalmente é invisível em apps de IA — a etapa de *retrieval* (busca) que fundamenta a resposta do modelo.
+
+## 🔬 Modo Fine-tuning (RAG vs. Fine-tuning)
+
+Como extensão deste projeto, foi adicionado um segundo modo de resposta, usando um modelo ajustado via **fine-tuning (LoRA)** sobre a mesma base de conhecimento do modo RAG — permitindo comparar as duas abordagens lado a lado.
+
+### Por que comparar as duas abordagens?
+
+| | RAG (modo padrão) | Fine-tuning (novo modo) |
+|---|---|---|
+| Como usa o conhecimento | Busca o trecho relevante em tempo real | O conhecimento é incorporado nos parâmetros do modelo durante o treino |
+| Cita a fonte | ✅ Sim | ❌ Não |
+| Atualização de conteúdo | Só adicionar novos documentos | Precisa re-treinar o modelo |
+| Custo/complexidade | Menor | Maior (treino, GPU, dataset) |
+
+### Como o fine-tuning foi feito
+
+1. Geração de um dataset de perguntas e respostas (`.jsonl`) a partir dos mesmos documentos usados no RAG
+2. Fine-tuning via **LoRA** (Parameter-Efficient Fine-Tuning), usando o modelo `Phi-3-mini` no Google Colab (GPU gratuita)
+3. Publicação do modelo ajustado no Hugging Face Hub
+4. Integração do modelo ao Fichário como um segundo modo de resposta
+
+O notebook completo do treino está disponível em [`/fine_tuning/fine_tuning_fichario.ipynb`](./fine_tuning/fine_tuning_fichario.ipynb).
+
+### Stack adicional
+
+- Hugging Face (`transformers`, `peft`, `datasets`)
+- LoRA (fine-tuning eficiente em parâmetros)
+- Google Colab (treino com GPU gratuita)
