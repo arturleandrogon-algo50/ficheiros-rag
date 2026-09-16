@@ -1,0 +1,30 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Variáveis de ambiente / chaves de API
+.env
+*.key
+
+# Node (caso venha a usar build tools no futuro)
+node_modules/
+dist/
+
+# Python / Jupyter (relacionado ao notebook de fine-tuning)
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Modelos e checkpoints de fine-tuning (arquivos grandes, não devem ir pro Git)
+resultado_finetuning/
+modelo_finetuned_fichario/
+*.bin
+*.safetensors
+
+# Arquivos temporários
+*.log
+*.tmp
