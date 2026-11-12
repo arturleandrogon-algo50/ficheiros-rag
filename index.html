@@ -34,8 +34,8 @@
       </div>
 
       <div id="dropzone" class="dropzone">
-        <input type="file" id="file-input" accept="application/pdf" hidden>
-        <p class="dropzone-title">Solte um PDF aqui</p>
+        <input type="file" id="file-input" accept="application/pdf,image/jpeg,image/png" hidden>
+        <p class="dropzone-title">Solte um PDF ou imagem (JPG/PNG)</p>
         <p class="dropzone-sub">ou clique para escolher</p>
       </div>
 
@@ -89,6 +89,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

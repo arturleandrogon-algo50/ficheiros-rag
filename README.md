@@ -23,10 +23,9 @@ Sem backend, sem banco de dados vetorial externo. Só HTML, CSS e JavaScript pur
 
 - HTML, CSS e JavaScript puro (sem frameworks)
 - [PDF.js](https://mozilla.github.io/pdf.js/) para extração de texto
+- [Tesseract.js](https://tesseract.projectnaptha.com/) para OCR local de PDFs escaneados e imagens (JPG/PNG)
 - API do Google Gemini para embeddings e geração de texto
 - Busca por similaridade de cosseno implementada do zero
-
-
 
 ## Conceito visual
 

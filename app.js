@@ -13,10 +13,13 @@ const CHAT_MODEL  = "gemini-3.6-flash";
 const CHUNK_SIZE  = 900;      // caracteres por ficha
 const CHUNK_OVERLAP = 150;    // sobreposição entre fichas
 const TOP_K = 4;              // fichas usadas por pergunta
+const OCR_LANG = "por";       // idioma do Tesseract.js
+const OCR_SCALE = 2;          // resolução do render da página para o OCR
+const IMAGE_TYPES = ["image/jpeg", "image/png"];
 
 const state = {
   apiKey: localStorage.getItem("fichario_api_key") || "",
-  chunks: [],       // { id, text, page, embedding }
+  chunks: [],       // { id, text, page, ocr, embedding }
   ready: false
 };
 
@@ -79,8 +82,9 @@ el.fileInput.addEventListener("change", (e) => {
 });
 
 async function handleFile(file) {
-  if (file.type !== "application/pdf") {
-    alert("Por enquanto o Fichário só lê arquivos PDF.");
+  const isImage = IMAGE_TYPES.includes(file.type);
+  if (file.type !== "application/pdf" && !isImage) {
+    alert("Por enquanto o Fichário só lê arquivos PDF, JPG ou PNG.");
     return;
   }
   if (!requireApiKey()) return;
@@ -91,8 +95,17 @@ async function handleFile(file) {
   el.docMeta.textContent = `${(file.size / 1024).toFixed(0)} KB`;
 
   try {
-    setStage("Extraindo texto do PDF…", 8);
-    const pages = await extractPdfText(file);
+    let pages;
+    if (isImage) {
+      setStage("Lendo imagem com OCR…", 8);
+      pages = await extractImageText(file);
+    } else {
+      setStage("Extraindo texto do PDF…", 8);
+      pages = await extractPdfText(file, (page, total) => {
+        const pct = 8 + Math.round(((page - 1) / total) * 14);
+        setStage(`Lendo página ${page}/${total} com OCR…`, pct);
+      });
+    }
 
     setStage("Recortando em fichas…", 22);
     const chunks = chunkPages(pages);
@@ -128,30 +141,66 @@ function setStage(text, pct) {
 }
 
 /* ---------- extração de texto do PDF ---------- */
-async function extractPdfText(file) {
+// Páginas com texto são lidas pelo PDF.js; páginas sem texto (scans) são
+// renderizadas num canvas e lidas com OCR local (Tesseract.js).
+async function extractPdfText(file, onOcr) {
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   const pages = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim();
-    if (text) pages.push({ page: i, text });
+  let worker = null;
+  try {
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      let text = content.items.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim();
+      let ocr = false;
+      if (!text) {
+        onOcr(i, pdf.numPages);
+        worker = worker || await Tesseract.createWorker(OCR_LANG);
+        const viewport = page.getViewport({ scale: OCR_SCALE });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        text = await ocrImage(worker, canvas);
+        ocr = true;
+      }
+      if (text) pages.push({ page: i, text, ocr });
+    }
+  } finally {
+    if (worker) await worker.terminate();
   }
-  if (!pages.length) throw new Error("Não consegui extrair texto deste PDF (pode ser um scan sem OCR).");
+  if (!pages.length) throw new Error("Não consegui extrair texto deste PDF, nem com OCR.");
   return pages;
+}
+
+/* ---------- OCR de imagens (JPG/PNG) ---------- */
+async function extractImageText(file) {
+  const worker = await Tesseract.createWorker(OCR_LANG);
+  try {
+    const text = await ocrImage(worker, file);
+    if (!text) throw new Error("Não encontrei texto nesta imagem.");
+    return [{ page: 1, text, ocr: true }];
+  } finally {
+    await worker.terminate();
+  }
+}
+
+async function ocrImage(worker, source) {
+  const { data } = await worker.recognize(source);
+  return data.text.replace(/\s+/g, " ").trim();
 }
 
 /* ---------- chunking com sobreposição ---------- */
 function chunkPages(pages) {
   const chunks = [];
   let id = 0;
-  for (const { page, text } of pages) {
+  for (const { page, text, ocr } of pages) {
     let start = 0;
     while (start < text.length) {
       const end = Math.min(start + CHUNK_SIZE, text.length);
       const slice = text.slice(start, end).trim();
-      if (slice) chunks.push({ id: id++, page, text: slice, embedding: null });
+      if (slice) chunks.push({ id: id++, page, text: slice, ocr, embedding: null });
       if (end === text.length) break;
       start = end - CHUNK_OVERLAP;
     }
@@ -209,7 +258,7 @@ function renderCardIndex(chunks) {
   for (const c of shown) {
     const div = document.createElement("div");
     div.className = "index-card";
-    div.innerHTML = `<b>Ficha ${String(c.id + 1).padStart(3, "0")} · pág. ${c.page}</b>${escapeHtml(c.text.slice(0, 90))}…`;
+    div.innerHTML = `<b>Ficha ${String(c.id + 1).padStart(3, "0")} · pág. ${c.page}${c.ocr ? " · OCR" : ""}</b>${escapeHtml(c.text.slice(0, 90))}…`;
     el.cardIndex.appendChild(div);
   }
   if (chunks.length > shown.length) {
@@ -260,12 +309,18 @@ el.chatForm.addEventListener("submit", async (e) => {
 
 async function askLLM(question, matches) {
   const context = matches
-    .map((m) => `[Ficha ${m.id + 1} — pág. ${m.page}]\n${m.text}`)
+    .map((m) => `[Ficha ${m.id + 1} — pág. ${m.page}${m.ocr ? " — OCR" : ""}]\n${m.text}`)
     .join("\n\n---\n\n");
+
+  const ocrNote = matches.some((m) => m.ocr)
+    ? `Trechos marcados com OCR foram lidos de imagem por reconhecimento óptico e podem conter erros de leitura ` +
+      `(letras ou números trocados, palavras quebradas). Leve isso em conta e, se um dado desses trechos parecer duvidoso, avise o usuário. `
+    : "";
 
   const prompt =
     `Você é um assistente que responde exclusivamente com base nos trechos de documento fornecidos abaixo. ` +
     `Se a resposta não estiver nos trechos, diga claramente que o documento não traz essa informação — não invente. ` +
+    ocrNote +
     `Responda em português, de forma direta.\n\n` +
     `TRECHOS DISPONÍVEIS:\n${context}\n\n` +
     `PERGUNTA: ${question}`;
@@ -301,7 +356,7 @@ function addMessage(role, text, sources) {
       const tag = document.createElement("span");
       tag.className = "source-tag";
       tag.title = s.text.slice(0, 160) + "…";
-      tag.textContent = `Ficha ${s.id + 1} · pág. ${s.page} · ${(s.score * 100).toFixed(0)}%`;
+      tag.textContent = `Ficha ${s.id + 1} · pág. ${s.page}${s.ocr ? " · OCR" : ""} · ${(s.score * 100).toFixed(0)}%`;
       srcWrap.appendChild(tag);
     }
     wrap.appendChild(srcWrap);
