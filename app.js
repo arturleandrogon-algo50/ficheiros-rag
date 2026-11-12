@@ -16,10 +16,13 @@ const TOP_K = 4;              // fichas usadas por pergunta
 const OCR_LANG = "por";       // idioma do Tesseract.js
 const OCR_SCALE = 2;          // resolução do render da página para o OCR
 const IMAGE_TYPES = ["image/jpeg", "image/png"];
+const THUMB_WIDTH = 240;      // px da miniatura (exibida a 120px; 2x para telas densas)
+const PREVIEW_WIDTH = 1400;   // px máximos da imagem ampliada
+const JPEG_QUALITY = 0.72;
 
 const state = {
   apiKey: localStorage.getItem("fichario_api_key") || "",
-  chunks: [],       // { id, text, page, ocr, embedding }
+  chunks: [],       // { id, text, page, ocr, image: { thumb, full } | null, embedding }
   ready: false
 };
 
@@ -39,6 +42,11 @@ const el = {
   progressFill: document.getElementById("progress-fill"),
   docStage: document.getElementById("doc-stage"),
   cardIndex: document.getElementById("card-index"),
+
+  imageModal: document.getElementById("image-modal"),
+  imageModalImg: document.getElementById("image-modal-img"),
+  imageModalCaption: document.getElementById("image-modal-caption"),
+  btnCloseImage: document.getElementById("btn-close-image"),
 
   chatLog: document.getElementById("chat-log"),
   chatForm: document.getElementById("chat-form"),
@@ -154,6 +162,7 @@ async function extractPdfText(file, onOcr) {
       const content = await page.getTextContent();
       let text = content.items.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim();
       let ocr = false;
+      let image = null;
       if (!text) {
         onOcr(i, pdf.numPages);
         worker = worker || await Tesseract.createWorker(OCR_LANG);
@@ -164,8 +173,9 @@ async function extractPdfText(file, onOcr) {
         await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
         text = await ocrImage(worker, canvas);
         ocr = true;
+        image = makePageImages(canvas);
       }
-      if (text) pages.push({ page: i, text, ocr });
+      if (text) pages.push({ page: i, text, ocr, image });
     }
   } finally {
     if (worker) await worker.terminate();
@@ -180,7 +190,10 @@ async function extractImageText(file) {
   try {
     const text = await ocrImage(worker, file);
     if (!text) throw new Error("Não encontrei texto nesta imagem.");
-    return [{ page: 1, text, ocr: true }];
+    const bitmap = await createImageBitmap(file);
+    const image = makePageImages(bitmap);
+    bitmap.close();
+    return [{ page: 1, text, ocr: true, image }];
   } finally {
     await worker.terminate();
   }
@@ -191,16 +204,36 @@ async function ocrImage(worker, source) {
   return data.text.replace(/\s+/g, " ").trim();
 }
 
+/* ---------- miniaturas das páginas de OCR (só em memória) ---------- */
+function makePageImages(source) {
+  return {
+    thumb: toJpeg(source, THUMB_WIDTH),
+    full: toJpeg(source, PREVIEW_WIDTH)
+  };
+}
+
+function toJpeg(source, maxWidth) {
+  const scale = Math.min(1, maxWidth / source.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(source.width * scale);
+  canvas.height = Math.round(source.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; // fundo branco para PNG com transparência
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
+
 /* ---------- chunking com sobreposição ---------- */
 function chunkPages(pages) {
   const chunks = [];
   let id = 0;
-  for (const { page, text, ocr } of pages) {
+  for (const { page, text, ocr, image } of pages) {
     let start = 0;
     while (start < text.length) {
       const end = Math.min(start + CHUNK_SIZE, text.length);
       const slice = text.slice(start, end).trim();
-      if (slice) chunks.push({ id: id++, page, text: slice, ocr, embedding: null });
+      if (slice) chunks.push({ id: id++, page, text: slice, ocr, image: image || null, embedding: null });
       if (end === text.length) break;
       start = end - CHUNK_OVERLAP;
     }
@@ -259,6 +292,16 @@ function renderCardIndex(chunks) {
     const div = document.createElement("div");
     div.className = "index-card";
     div.innerHTML = `<b>Ficha ${String(c.id + 1).padStart(3, "0")} · pág. ${c.page}${c.ocr ? " · OCR" : ""}</b>${escapeHtml(c.text.slice(0, 90))}…`;
+    if (c.image) {
+      div.classList.add("has-thumb");
+      const thumb = document.createElement("button");
+      thumb.type = "button";
+      thumb.className = "thumb";
+      thumb.title = "Ampliar página";
+      thumb.innerHTML = `<img src="${c.image.thumb}" alt="Miniatura da pág. ${c.page}">`;
+      thumb.addEventListener("click", () => openImageModal(c.image.full, `Pág. ${c.page} · OCR`));
+      div.prepend(thumb);
+    }
     el.cardIndex.appendChild(div);
   }
   if (chunks.length > shown.length) {
@@ -268,6 +311,25 @@ function renderCardIndex(chunks) {
     el.cardIndex.appendChild(note);
   }
 }
+
+/* ---------- modal da imagem ampliada ---------- */
+function openImageModal(src, caption) {
+  el.imageModalImg.src = src;
+  el.imageModalCaption.textContent = caption;
+  el.imageModal.classList.remove("hidden");
+  el.btnCloseImage.focus();
+}
+function closeImageModal() {
+  el.imageModal.classList.add("hidden");
+  el.imageModalImg.removeAttribute("src");
+}
+el.btnCloseImage.addEventListener("click", closeImageModal);
+el.imageModal.addEventListener("click", (e) => {
+  if (e.target === el.imageModal) closeImageModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el.imageModal.classList.contains("hidden")) closeImageModal();
+});
 
 /* ---------- chat ---------- */
 function enableChat() {

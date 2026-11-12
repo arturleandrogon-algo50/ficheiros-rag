@@ -157,6 +157,17 @@ body{
   display:block; color:var(--ink); font-family:'Fraunces', serif;
   font-size:12px; margin-bottom:3px;
 }
+.index-card.has-thumb{ display:flow-root; }
+.thumb{
+  float:left; width:120px; margin:0 10px 0 0; padding:0;
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:#fff; cursor:zoom-in; line-height:0;
+}
+.thumb img{
+  display:block; width:100%; max-height:170px;
+  object-fit:cover; object-position:top; border-radius:inherit;
+}
+.thumb:hover, .thumb:focus-visible{ border-color:var(--stamp); outline:none; }
 
 /* ---------- Sala de leitura (chat) ---------- */
 .reading-room{
@@ -236,6 +247,26 @@ body{
   font-family:'IBM Plex Mono', monospace;
 }
 .modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+
+.image-box{
+  position:relative; width:auto; max-width:92vw; padding:14px;
+}
+.image-box img{
+  display:block; margin:0 auto; background:#fff;
+  max-width:calc(92vw - 32px); max-height:calc(90vh - 70px);
+  object-fit:contain; border:1px solid var(--line);
+}
+.modal-box .image-caption{
+  margin:8px 0 0; font-family:'IBM Plex Mono', monospace;
+  font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+}
+.image-close{
+  position:absolute; top:-14px; right:-14px;
+  width:30px; height:30px; border-radius:50%;
+  background:var(--ink); color:var(--paper); border:2px solid var(--card);
+  font-size:18px; line-height:1; cursor:pointer;
+}
+.image-close:hover, .image-close:focus-visible{ background:var(--stamp); outline:none; }
 
 /* ---------- Scroll & responsivo ---------- */
 ::-webkit-scrollbar{ width:9px; }
